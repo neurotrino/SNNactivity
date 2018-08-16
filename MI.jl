@@ -1,6 +1,84 @@
 #what to do about 0. alpha + (1-alpha)*p or should i filter NaN
 #check post pre conventions
 
+function signed(graph,raster)
+	# takes MI graph returns signed MI graph
+	N = size(graph)[1]
+	signed_graph = copy(graph)
+	for i = 1:N
+		for j = i:N
+			corr_mat = cor(hcat(raster[i,:],raster[j,:]))
+			signed_graph[j,i] *= sign(corr_mat[1,2])
+			signed_graph[i,j] *= sign(corr_mat[2,1])
+		end
+	end
+	return signed_graph
+end
+
+function pos(graph)
+	#takes signed MI graph, returns positive version
+	pos_graph = copy(graph)
+	pos_graph[find(x->x<0,graph)] = 0
+	return pos_graph 
+end
+
+function reexpress_param(graph)
+	#takes pos graph and returns redist graph
+	steps = 100
+	data = graph[:]
+	data = data[find(x->x<=0,data)]
+	upper_exp=10
+	lower_exp=0.00000000000001
+	upper_skew = skewness(data.^upper_exp)
+	lower_skew = skewness(data.^lower_exp)
+	for i = 1:steps
+		new_exp = (upper_exp + lower_exp)/2
+		new_skew = skewness(data.^new_exp)
+	    if new_skew<0
+	        lower_exp=new_exp;
+	        lower_skew=new_skew;
+	    else
+	        upper_exp=new_exp;
+	        upper_skew=new_skew;
+	    end
+	end
+	if abs(upper_skew)<abs(lower_skew)
+		reexpress = upper_exp
+	else
+		reexpress = lower_exp
+	end
+	print(reexpress,"\n\n")
+	reexpress_graph = copy(graph)
+	reexpress_graph = reexpress_graph.^reexpress_graph
+	return reexpress_graph
+end
+
+function background(graph)
+	#takes reexpress graph returns background graph
+	background = copy(graph)
+	N = size(graph)[1]
+	for i = 1:N
+		for j = 1:N
+			background[j,i] = mean(graph[j,1:N .!= i])*mean(graph[1:N .!= j,i])
+		end
+	end
+	return background
+end
+
+function residual(background_graph,graph)
+	#takes background graph and MI graph
+	#returns residual graph
+	residual = copy(graph)
+	N = size(graph)[1]
+	data_y = graph[:]
+	data_x = hcat(background_graph[:],ones(N*N))
+	coefs = data_x\data_y
+	m = coefs[1]
+	b = coefs[2]
+	residual = graph - (m*graph + b)
+	return residual
+end
+
 function MI(train_1,train_2,lag,alpha)
 	MI = 0
 	states = [0,1]

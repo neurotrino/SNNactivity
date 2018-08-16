@@ -79,6 +79,21 @@ function residual(background_graph,graph)
 	return residual
 end
 
+function normed_residual(graph)
+	#tales residual graph returns
+	#normalized residual graph
+	norm_residual = copy(graph)
+	N = size(graph)[1]
+	for i = 1:N
+		for j = 1:N
+			norm_residual[j,i] = std(graph[j,1:N .!= i])*std(graph[1:N .!= j,i])
+		end
+	end
+	cutoff = median(norm_residual)
+	norm_residual = 1./(sqrt.(max.(norm_residual,ones(N,N)*cutoff)))
+	return norm_residual.*graph
+end
+
 function MI(train_1,train_2,lag,alpha)
 	MI = 0
 	states = [0,1]

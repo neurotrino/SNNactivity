@@ -7,7 +7,7 @@
    mean at each timestep.
 =#
 
-include("/Users/maclean lab/Documents/qing/jason_proj_2.jl");
+include("/Users/maclean lab/Documents/qing/SNNactivity/jason_proj_2.jl");
 
 # create some network, run it, look at its spikes and topology
 function main()

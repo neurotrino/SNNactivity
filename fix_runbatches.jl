@@ -2,10 +2,11 @@
 # Re-runs the network and records resulting spikes and scores.
 
 using MAT
-include("C:/Users/maclean lab/Documents/qing/jason_proj_2.jl")
-include("C:/Users/maclean lab/Documents/qing/equiv_demo.jl");
-include("C:/Users/maclean lab/Documents/qing/temporal_motifs.jl");
-include("C:/Users/maclean lab/Documents/qing/static_temp_analysis.jl");
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/jason_proj_2.jl")
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/equiv_demo.jl");
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/temporal_motifs.jl");
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/static_temp_analysis.jl");
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/fix_runbatches.jl");
 
 #= outer structure I envision would include calling everything needed to generate a 'batch'
     - creating the static topology, poisson input, and input units on which we

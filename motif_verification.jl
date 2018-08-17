@@ -1,11 +1,11 @@
 # Motif Verification
 
 using MAT
-include("C:/Users/maclean lab/Documents/qing/jason_proj_2.jl")
-include("C:/Users/maclean lab/Documents/qing/equiv_demo.jl");
-include("C:/Users/maclean lab/Documents/qing/temporal_motifs.jl");
-include("C:/Users/maclean lab/Documents/qing/static_temp_analysis.jl");
-include("C:/Users/maclean lab/Documents/qing/fix_runbatches.jl");
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/jason_proj_2.jl")
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/equiv_demo.jl");
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/emporal_motifs.jl");
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/static_temp_analysis.jl");
+include("C:/Users/maclean lab/Documents/qing/SNNactivity/fix_runbatches.jl");
 
 # as of 20180808
 
@@ -498,6 +498,11 @@ function rate_comparison(group_num,net_num,bin)
 
     io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/fix_all/Run1_Scores.jld");
     Scores = io["batchscores"];
+
+    # random sample to match the size of our Run2 sample. 
+    ridx = rand(1:length(Spikes),100,1);
+    Scores = Scores[ridx];
+    Spikes = Spikes[ridx];
 
     ofinterest = find(Scores[:,3].>.95);
 

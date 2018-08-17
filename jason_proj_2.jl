@@ -208,7 +208,7 @@ function integrate!(net::Network500,poisson_stim,i,projected)
 	else
 		net.I = zeros(N)
 		net.gP[projected] = net.gP[projected]*exp.(-taup*net.dt);
-		# advance via euler's method 
+		# advance via euler's method
 	end
 	net.refrac[find(net.refrac)] += 1 #increment everything by one time step
 	net.refrac[find(x->x>(refrac_max+1),net.refrac)] = 0
@@ -1275,56 +1275,159 @@ function finalize_var(existingAggregate)
     end
 end
 
-function branching_param(tSpike,W)
-	# edited as of 20180730 to reflect the convention of W[ii,jj] where jj projects to ii.
+function branching_param(tSpike,W,bin)
+	# edited as of 20180816 to be correct!
+	nbins = convert(Int64,run_total/bin);
+	spike_set = [];
+	active_inds = [];
+	for ii = 1:length(tSpike)
+		post_stim = (tSpike[ii])[find(tSpike[ii].>stim_in)];
+		if !isempty(post_stim)
+			push!(spike_set,tSpike[ii]);
+			push!(active_inds,ii);
+		end
+	end
 
-    # args are net.tSpike in form [N x num_spikes_per_neuron] array
-    # returns the branching scores for every neuron and for the network on average
-    # I need to get a better grasp of the size and contents of we, wi
-    # so far assuming w is available to me and is what it is (directed weight matrix of NxN values)
-    units_bscore = zeros(N);
-    # discretize spike times into dt Matrix
-    dt = .1;
-    nbins = run_total/dt;
-    Spikes_binned = zeros(N,nbins);
-    for ii = 1:N
-        # find the indices for neuron ii for which we'll put a 1 in Spikes_binned
-        indices = floor(tSpike[ii,]./dt);
-        for jj = 2:length(indices) # first value is '0'
-            Spikes_binned[ii,convert(Int64,indices[jj])] = 1;
-        end
-        # in the end we'll get a '1' in the right [neuron,timebin] array slot for each spike of each neuron
-    end
-    for ii = 1:N # for every neuron in the network
-        if length(tSpike[ii,]) > 0
-            # for all edges this neuron ii has in the network
-            # (and first we have to find them)
-            edges = find(W[:,ii].!=0); # existence of projections from ii to all other units
-            Nedges = length(edges);
-            # find all the time bins t in which neuron ii spiked,
-            # examine the time bins t+1 for each of the neurons in edges
-            cuebin = find(Spikes_binned[ii,:].==1);
-            gobin = cuebin+1;
-            Jcount = zeros(Nedges+1);
-			# array to increment the count for how many times those number of neurons were recruited
-            # also have to account for the probability that zero were recruited (hence the +1, and we will index as though 0=1)
-            for tt = 1:length(gobin) # for every time that neuron ii spiked:
-                # out of the neurons that it's connected to (indexed in edges), how many of those had a spike (value of 1 in Spikes_binned) at time t+1?
-                ct = length(find(Spikes_binned[edges,gobin[tt]].==1)); # if I'm doing julia right, this will give us the number of edges in this time which spiked (were recruited)
-                Jcount[ct+1] = Jcount[ct+1] + 1; # increment the count for the occurence of this recruitment number
-            end
-            # calculate using equation 1 from Beggs & Plenz, 2003
-            P = Jcount./length(cuebin); # probability of observing those many descendants
-            k = collect(1:length(Jcount))-1
-            units_bscore[ii] = sum(k.*P);
-        else
-            units_bscore[ii] = NaN;
-        end
-    end
-    net_bscore = mean(filter(!isnan,units_bscore));
-    net_bscore_e = mean(filter(!isnan,units_bscore[1:Ne]));
-    net_bscore_i = mean(filter(!isnan,units_bscore[Ne+1:N]));
-    return net_bscore_e, net_bscore_i, net_bscore, units_bscore;
+	e_edges = find(active_inds.<=Ne);
+	i_edges = find(active_inds.>Ne);
+
+	Nactive = length(spike_set);
+	W_active = W[active_inds,active_inds];
+
+	units_bscore = zeros(Nactive,);
+
+	Spikes_binned = zeros(Nactive,nbins);
+	# don't shuffle the correspondence of the spikes
+	for ii = 1:Nactive
+		# find the indices for neuron ii for which we'll put a 1 in Spikes_binned
+		if !isempty(spike_set[ii,])
+			indices = floor.(spike_set[ii]);
+			indices = indices[find(indices.<=nbins)];
+			indices = indices[find(indices.>0)]; # get rid of the first zero
+			for jj = 1:length(indices)
+				Spikes_binned[ii,convert(Int64,indices[jj])] = 1;
+			end
+		end
+	end
+
+	span = collect(Int64,5/bin:20/bin);
+
+	# for every group of subsequent timesteps, determine the number of ancestors and the number of descendants
+	numA = zeros(nbins-maximum(span)); # number of ancestors for each bin
+	numD = zeros(nbins-maximum(span)); # number of descendants for each ancestral bin
+	d = zeros(nbins-maximum(span)); # the number of electrode descendants per ancestor
+	for tt = 1:length(numA)
+		# that is, we look at time tt for nA and time tt+5ms:tt+20ms for nD
+		# this is going to be a little hairy...
+		numA[tt] = length(find(Spikes_binned[:,tt].==1));
+		numD[tt] = length(find(Spikes_binned[:,tt+span]));
+		d[tt] = round.(numD[tt]/numA[tt]); # the ratio of descendants to ancestors
+	end
+
+	dratio = filter(!isnan,d);
+	filter!(!isinf,dratio);
+	#filter!(!iszero,dratio);
+	dratio = unique(dratio);
+	sort!(dratio);
+	pd = zeros(length(dratio),);
+	Na = sum(numA); # the total number of ancestors over all bins
+	#norm = (Nactive-1)/(Nactive - Na); # correction for refractoriness in next time bin (we do not have refractoriness)
+
+#=
+	uniqD = unique(numD);
+	pd = zeros(length(uniqD)); # probability of observing d descendants
+	for ii = 1:length(uniqD)
+		idx = find(numD.==uniqD[ii]);
+		if !isempty(idx)
+			nad = sum(numA[idx]);
+			pd[ii] = (nad/Na);
+		end
+	end
+=#
+
+	i = 1;
+	for ii = 1:length(dratio)
+		# find the total number of ancestors in all avalanches where there were d descendants
+		idx = find(d.==dratio[ii]);
+		if !isempty(idx)
+			nad = sum(numA[idx]);
+			# from that, get the likelihood of d descendants
+			pd[i] = (nad/Na);
+		end
+		i += 1;
+	end
+
+	net_bscore = sum(dratio.*pd)/length(span);
+
+	# do the above again using subspikes where we are only looking at e_edges and i_edges
+	subspikes_e = Spikes_binned[e_edges,:];
+	numA = zeros(nbins-maximum(span)); # number of ancestors for each bin
+	numD = zeros(nbins-maximum(span)); # number of descendants for each ancestral bin
+	d = zeros(nbins-maximum(span)); # the number of electrode descendants per ancestor
+	for tt = 1:length(numA)
+		# that is, we look at time tt for nA and time tt+5ms:tt+20ms for nD
+		# this is going to be a little hairy...
+		numA[tt] = length(find(subspikes_e[:,tt].==1));
+		numD[tt] = length(find(subspikes_e[:,tt+span]));
+		d[tt] = round.(numD[tt]/numA[tt]); # the ratio of descendants to ancestors
+	end
+	dratio = filter(!isnan,d);
+	filter!(!isinf,dratio);
+	#filter!(!iszero,dratio);
+	dratio = unique(dratio);
+	sort!(dratio);
+	pd = zeros(length(dratio),);
+	Na = sum(numA); # the total number of ancestors over all bins
+	#norm = (Nactive-1)/(Nactive - Na); # correction for refractoriness in next time bin (we do not have refractoriness)
+	i = 1;
+	for ii = 1:length(dratio)
+		# find the total number of ancestors in all avalanches where there were d descendants
+		idx = find(d.==dratio[ii]);
+		if !isempty(idx)
+			nad = sum(numA[idx]);
+			# from that, get the likelihood of d descendants
+			pd[i] = (nad/Na);
+		end
+		i += 1;
+	end
+	net_bscore_e = sum(dratio.*pd)/length(span);
+
+
+	subspikes_i = Spikes_binned[i_edges,:];
+	numA = zeros(nbins-maximum(span)); # number of ancestors for each bin
+	numD = zeros(nbins-maximum(span)); # number of descendants for each ancestral bin
+	d = zeros(nbins-maximum(span)); # the number of electrode descendants per ancestor
+	for tt = 1:length(numA)
+		# that is, we look at time tt for nA and time tt+5ms:tt+20ms for nD
+		# this is going to be a little hairy...
+		numA[tt] = length(find(subspikes_i[:,tt].==1));
+		numD[tt] = length(find(subspikes_i[:,tt+span]));
+		d[tt] = round.(numD[tt]/numA[tt]); # the ratio of descendants to ancestors
+	end
+	dratio = filter(!isnan,d);
+	filter!(!isinf,dratio);
+	#filter!(!iszero,dratio);
+	dratio = unique(dratio);
+	sort!(dratio);
+	pd = zeros(length(dratio),);
+	Na = sum(numA); # the total number of ancestors over all bins
+	#norm = (Nactive-1)/(Nactive - Na); # correction for refractoriness in next time bin (we do not have refractoriness)
+	i = 1;
+	for ii = 1:length(dratio)
+		# find the total number of ancestors in all avalanches where there were d descendants
+		idx = find(d.==dratio[ii]);
+		if !isempty(idx)
+			nad = sum(numA[idx]);
+			# from that, get the likelihood of d descendants
+			pd[i] = (nad/Na);
+		end
+		i += 1;
+	end
+	net_bscore_i = sum(dratio.*pd)/length(span);
+
+
+
+    return net_bscore_e, net_bscore_i, net_bscore;
 end
 
 
@@ -1486,7 +1589,8 @@ function score(param;trials=0,generated_net=0,plot=false,generated_stim=0,genera
 	score[4] = net.vm_var_e_pop_M2/mean(net.vm_var_e_M2)#synch e
 	score[5] = net.vm_var_i_pop_M2/mean(net.vm_var_i_M2)#synch i
 	score[6] = net.vm_var_pop_M2/mean(net.vm_var_M2)#synch tot
-	score[7],score[8],score[9],neuron_branches = branching_param(net.tSpike,generated_net)#branc_e, branch_i,branch_total
+	bin = 5;
+	score[7],score[8],score[9] = branching_param(net.tSpike,generated_net,bin)#branc_e, branch_i,branch_total
 	print(score,"\n\n")
 
 	#discretize_dt = 5

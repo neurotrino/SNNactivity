@@ -17,7 +17,7 @@ end
 function main(spikes,dt)
 	raster = binary_raster_gen(spikes,dt)
 	MI_graph = confMI_mat(raster)
-	signed_graph = signed_MI(MI_graph)
+	signed_graph = signed_MI(MI_graph,raster)
 	pos_graph = pos(signed_graph)
 	reexpress_graph = reexpress_param(pos_graph)
 	background_graph = background(reexpress_graph)
@@ -30,12 +30,14 @@ function signed_MI(graph,raster)
 	# takes MI graph returns signed_MI MI graph
 	neurons = size(graph)[1]
 	signed_graph = copy(graph)
-	@showprogress 1 "Computing signed_MI MI Graph" for post = 1:neurons
+	@showprogress 1 "Computing signed_MI Graph" for post = 1:neurons
 		for pre = (post+1):neurons
 			corr_mat = cor(hcat(raster[pre,:],raster[post,:]))
 			factor = sign(corr_mat[1,2])
-			signed_graph[post,pre] *= factor
-			signed_graph[pre,post] *= factor
+			if ~isnan(factor)
+				signed_graph[post,pre] *= factor
+				signed_graph[pre,post] *= factor
+			end
 		end
 	end
 	return signed_graph
@@ -52,7 +54,7 @@ function reexpress_param(graph)
 	#takes pos graph and returns redist graph
 	steps = 100
 	data = graph[:]
-	data = data[find(x->x<=0,data)]
+	data = data[find(x->x>0,data)]
 	upper_exp=10
 	lower_exp=0.00000000000001
 	upper_skew = skewness(data.^upper_exp)
@@ -73,7 +75,6 @@ function reexpress_param(graph)
 	else
 		reexpress = lower_exp
 	end
-	print(reexpress,"\n\n")
 	reexpress_graph = copy(graph)
 	reexpress_graph = reexpress_graph.^reexpress
 	return reexpress_graph
@@ -86,7 +87,7 @@ function background(graph)
 	@showprogress 1 "Computing Background Graph" for pre = 1:neurons
 		for post = 1:neurons
 			if (post != pre)
-				background[post,pre] = mean(graph[post,1:N .!= pre])*mean(graph[1:N .!= post,pre])
+				background[post,pre] = mean(graph[post,1:neurons .!= pre])*mean(graph[1:neurons .!= post,pre])
 			end
 		end
 	end
@@ -98,12 +99,8 @@ function residual(background_graph,graph)
 	#returns residual graph
 	residual = copy(graph)
 	neurons = size(graph)[1]
-	data_y = graph[:]
-	data_x = hcat(background_graph[:],ones(neurons*neurons))
-	coefs = data_x\data_y
-	m = coefs[1]
-	b = coefs[2]
-	residual = graph - (m*graph + b)
+	b,m = linreg(background_graph[:],graph[:])
+	residual = graph - (m*background_graph + b)
 	return residual
 end
 
@@ -115,12 +112,12 @@ function normed_residual(graph)
 	@showprogress 1 "Normalizing Residual Graph" for pre = 1:neurons
 		for post = 1:neurons
 			if (post != pre)
-				norm_residual[post,pre] = std(graph[post,1:N .!= pre])*std(graph[1:N .!= post,pre])
+				norm_residual[post,pre] = std(graph[post,1:neurons .!= pre])*std(graph[1:neurons .!= post,pre])
 			end
 		end
 	end
 	cutoff = median(norm_residual)
-	norm_residual = 1./(sqrt.(max.(norm_residual,ones(N,N)*cutoff)))
+	norm_residual = 1./(sqrt.(max.(norm_residual,ones(neurons,neurons)*cutoff)))
 	return norm_residual.*graph
 end
 

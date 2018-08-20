@@ -1595,8 +1595,8 @@ function score(param;trials=0,generated_net=0,plot=false,generated_stim=0,genera
 	score[4] = net.vm_var_e_pop_M2/mean(net.vm_var_e_M2)#synch e
 	score[5] = net.vm_var_i_pop_M2/mean(net.vm_var_i_M2)#synch i
 	score[6] = net.vm_var_pop_M2/mean(net.vm_var_M2)#synch tot
-	bin = 5;
-	score[7],score[8],score[9] = branching_param(net.tSpike,generated_net,bin)#branc_e, branch_i,branch_total
+	bin_size = 5;
+	score[7],score[8],score[9] = branching_param(net.tSpike,we/(1*nS)+wi/(10*nS),bin_size)#branc_e, branch_i,branch_total
 	print(score,"\n\n")
 
 	#discretize_dt = 5

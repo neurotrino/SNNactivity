@@ -6,7 +6,7 @@ include("C:/Users/maclean lab/Documents/qing/SNNactivity/jason_proj_2.jl")
 include("C:/Users/maclean lab/Documents/qing/SNNactivity/equiv_demo.jl");
 include("C:/Users/maclean lab/Documents/qing/SNNactivity/temporal_motifs.jl");
 include("C:/Users/maclean lab/Documents/qing/SNNactivity/static_temp_analysis.jl");
-include("C:/Users/maclean lab/Documents/qing/SNNactivity/fix_runbatches.jl");
+#include("C:/Users/maclean lab/Documents/qing/SNNactivity/fix_runbatches.jl");
 
 #= outer structure I envision would include calling everything needed to generate a 'batch'
     - creating the static topology, poisson input, and input units on which we
@@ -75,15 +75,19 @@ function run_batches(run,Nbatch,group_num,net_num)
     # fixing everything, we want to observe how the spikes and scores change
     batchscores = zeros(Nbatch,9);
     batchspikes = [];
+    batchic = [];
     for jj = 1:Nbatch
-        batchscores[jj,:],spikes = fix_all(param,graph,generated_stim,generated_projected);
+        batchscores[jj,:],spikes,ic = fix_all(param,graph,generated_stim,generated_projected);
         push!(batchspikes,spikes);
+        push!(batchic,ic);
     end
     # save all scores to some data file
     fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_all/Run$(run)_Spikes.jld";
     save(fname,"batchspikes",batchspikes);
     fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_all/Run$(run)_Scores.jld";
     save(fname,"batchscores",batchscores);
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_all/Run$(run)_IC.jld";
+    save(fname,"batchic",batchic);
 
     #= fix topology
     if run == 1
@@ -112,18 +116,23 @@ function run_batches(run,Nbatch,group_num,net_num)
     batchscores = zeros(Nbatch,9);
     batchspikes = [];
     batchstim = [];
+    batchic = [];
     for jj = 1:Nbatch
-        batchscores[jj,:],spikes,stim = fix_topology_stim(param,graph,generated_projected);
+        batchscores[jj,:],spikes,stim,ic = fix_topology_projected(param,graph,generated_projected);
         push!(batchspikes,spikes);
         push!(batchstim,stim);
+        push!(batchic,ic);
     end
     # and save
-    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_stim/Run$(run)_Scores.jld";
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Scores.jld";
     save(fname,"batchspikes",batchspikes);
-    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_stim/Run$(run)_Spikes.jld";
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Spikes.jld";
     save(fname,"batchscores",batchscores);
-    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_stim/Run$(run)_Stim.jld";
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Stim.jld";
     save(fname,"batchstim",batchstim);
+    # save the stim, the projected units are static and already in the original D: directory
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_IC.jld";
+    save(fname,"batchic",batchic);
 
     # fix topology and poisson input trains, change input units
     if run == 1
@@ -132,42 +141,55 @@ function run_batches(run,Nbatch,group_num,net_num)
 
     batchscores = zeros(Nbatch,9);
     batchspikes = [];
+    batchic = [];
     batchprojected = zeros(Nbatch,num_projected);
     for jj = 1:Nbatch
-        batchscores[jj,:],spikes,batchprojected[jj,:] = fix_topology_projected(param,graph,generated_stim);
+        batchscores[jj,:],spikes,batchprojected[jj,:],ic = fix_topology_stim(param,graph,generated_stim);
         push!(batchspikes,spikes);
+        push!(batchic,ic);
     end
     # and save
-    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Scores.jld";
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_stim/Run$(run)_Scores.jld";
     save(fname,"batchscores",batchscores);
-    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Spikes.jld";
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_stim/Run$(run)_Spikes.jld";
     save(fname,"batchspikes",batchspikes);
-    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Projected.jld";
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_stim/Run$(run)_Projected.jld";
     save(fname,"batchprojected",batchprojected);
+    # save the projected units, the stim is static and already in original D: directory
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_stim/Run$(run)_IC.jld";
+    save(fname,"batchic",batchic);
 
+end
+
+function fix_all_ic(param, generated_net, generated_stim, generated_projected, saved_ic)
+    # score(param;trials=0,generated_net=0,plot=false,generated_stim=0,generated_projected=0,saved_ic=0)
+    # this function reproduces the exact set of parameters, including initial conditions
+    (score_vals, tSpike, projected, we+wi, gP_full, ic) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=generated_stim,generated_projected=generated_projected,saved_ic)
+    return score_vals, tSpike, ic
 end
 
 function fix_all(param,generated_net,generated_stim,generated_projected) # is this deterministic?
     # returns score=[excitatory rate, inhibitory rate, last spike time, network branching score]
-    (score_vals, tSpike, projected, we+wi, gP_full) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=generated_stim,generated_projected=generated_projected)
+    (score_vals, tSpike, projected, we+wi, gP_full, ic) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=generated_stim,generated_projected=generated_projected,saved_ic=0)
     # note that plot=true will just give you the raster
-    return score_vals, tSpike
+    return score_vals, tSpike, ic
 end
 
 function fix_topology(param,generated_net)
-    (score_vals, tSpike, projected, we+wi, gP_full) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=0,generated_projected=0)
-    return score_vals, tSpike, projected, gP_full;
+    (score_vals, tSpike, projected, we+wi, gP_full, ic) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=0,generated_projected=0,saved_ic=0)
+    return score_vals, tSpike, projected, gP_full, ic;
 end
 
-function fix_topology_stim(param,generated_net,generated_projected)
-    (score_vals, tSpike, projected, we+wi, gP_full) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=0,generated_projected=generated_projected)
-    return score_vals, tSpike, gP_full;
+function fix_topology_projected(param,generated_net,generated_projected)
+    # as the projected units are static, save the Poisson stim each time (gP_full)
+    (score_vals, tSpike, projected, we+wi, gP_full, ic) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=0,generated_projected=generated_projected,saved_ic=0)
+    return score_vals, tSpike, gP_full, ic;
 end
 
-function fix_topology_projected(param,generated_net,generated_stim)
-    # well you probably would've wanted to record which the input units actually are each time
-    (score_vals, tSpike, projected, we+wi, gP_full) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=generated_stim,generated_projected=0)
-    return score_vals, tSpike, projected;
+function fix_topology_stim(param,generated_net,generated_stim)
+    # as the Poisson stim is static, save the input units each time (projected)
+    (score_vals, tSpike, projected, we+wi, gP_full, ic) = score(param;trials=0,generated_net=generated_net,plot=false,generated_stim=generated_stim,generated_projected=0,saved_ic=0)
+    return score_vals, tSpike, projected, ic;
 end
 
 function analyze_batches(run,group_num,net_num,fixtype,bin)

@@ -1431,7 +1431,7 @@ function branching_param(tSpike,W,bin)
 end
 
 
-function score(param;trials=0,generated_net=0,plot=false,generated_stim=0,generated_projected=0) # structured as p_ie, p_ei, generates and scores network
+function score(param;trials=0,generated_net=0,plot=false,generated_stim=0,generated_projected=0,saved_ic=0) # structured as p_ie, p_ei, generates and scores network
 	 # connection probabilities
 
 	 #args param is a param set of length 4 with [p_ie p_ei p_ii R]
@@ -1498,7 +1498,13 @@ function score(param;trials=0,generated_net=0,plot=false,generated_stim=0,genera
 	#wi = sprand(2400,2400,.11)*10*nS
 	t=0
 	delay=0
-	vm= -60*ones(N)+10*rand(N)
+	if saved_ic == 0
+		vm= -60*ones(N)+10*rand(N)
+		ic = copy(vm)
+	else
+		vm = saved_ic
+		ic = saved_ic
+	end
 	w=zeros(N)
 	gE=zeros(N)
 	gI=zeros(N)
@@ -1747,9 +1753,10 @@ function score(param;trials=0,generated_net=0,plot=false,generated_stim=0,genera
 
 	#return score,	wp , stim, gP_full, we+wi, net.tSpike, projected, cycle_CC, middleman_CC, fanin_CC, fanout_CC, all_motifs_CC
 	#ISI_hist(net.tSpike)
-	return score, net.tSpike, projected, we+wi, gP_full
+	return score, net.tSpike, projected, we+wi, gP_full, ic
 	#, func_net# cluster_vals #Network_holder#, net#, mat
 	#return net.tSpike, we+wi
+
 end
 
 function ISI_hist(spikes)

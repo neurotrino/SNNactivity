@@ -3,8 +3,8 @@ This script examines the current lowest rate network in "D:/qing/0/"
 As of 180724, that network is 22000.
 =#
 
-include("/Users/maclean lab/Documents/qing/jason_proj_2.jl");
-include("/Users/maclean lab/Documents/qing/equiv_demo.jl");
+include("/Users/maclean lab/Documents/qing/SNNactivity/jason_proj_2.jl");
+include("/Users/maclean lab/Documents/qing/SNNactivity/equiv_demo.jl");
 using MAT;
 
 function main()

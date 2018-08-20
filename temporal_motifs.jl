@@ -6,9 +6,9 @@
 # 4. and using that, calculate the population motifs.
 # 5. save the data for the isomorphic motifs and overal CC to .mat files.
 
-include("/Users/maclean lab/Documents/qing/jason_proj_2.jl");
-include("/Users/maclean lab/Documents/qing/equiv_demo.jl");
-include("/Users/maclean lab/Documents/qing/static_temp_analysis.jl");
+include("/Users/maclean lab/Documents/qing/SNNactivity/jason_proj_2.jl");
+include("/Users/maclean lab/Documents/qing/SNNactivity/equiv_demo.jl");
+include("/Users/maclean lab/Documents/qing/SNNactivity/static_temp_analysis.jl");
 using MAT;
 
 function main()

@@ -1425,8 +1425,6 @@ function branching_param(tSpike,W,bin)
 	end
 	net_bscore_i = sum(dratio.*pd)/length(span);
 
-
-
     return net_bscore_e, net_bscore_i, net_bscore;
 end
 

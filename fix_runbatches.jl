@@ -23,7 +23,9 @@ include("C:/Users/maclean lab/Documents/qing/SNNactivity/static_temp_analysis.jl
     and/or the average across the network. make sure you save everything somewhere reasonably organized.
 =#
 Nbatch = 500
-run = 1;
+run = 3;
+group_num=1;
+net_num=6974;
 # make folders to save data
 
 function run_batches(run,Nbatch,group_num,net_num)

@@ -38,7 +38,7 @@ const siemens=1e3;const mS=msiemens=siemens/1e3; const nS=nsiemens=siemens/1e9;
 const Ne = 4000
 const Ni = 1000
 const N = Ne+Ni
-@everywhere const run_total = 1000; # total run time
+@everywhere const run_total = 10000; # total run time
 
 const num_poisson = 3000 # characterize input
 const num_projected = 500;
@@ -576,6 +576,86 @@ function motifs_overtime(spike_list_set,time_start,time_end,bins,adj_mat)
 	return motif_vals, normalize_motif_vals,ts
 end
 
+function unweighted_clustered_motifs(adj_mat) # revision as of 20180728
+
+	if(isempty(adj_mat)) # with the way calculating recruitment, unlikely to be the case.
+		return NaN,NaN,NaN,NaN,NaN
+	elseif(isempty(find(adj_mat.!=0)))
+		return NaN,NaN,NaN,NaN,NaN
+	end
+
+	W = adj_mat'; # Wij convention in Fagiolo is the transpose of ours
+
+	dim = size(adj_mat)[1];
+
+	if(!isempty(find(W.!=0)))
+		W[W .!= 0] = 1;
+		d_in = zeros(dim,);
+		d_out = zeros(dim,);
+		d_bi = zeros(dim,);
+		for ii = 1:dim # find in, out, and bi-degrees for each unit in the network
+			in_nodes = find(W[:,ii].!=0); # the units that project in to ii
+			out_nodes = find(W[ii,:].!=0); # the units that ii projects out to
+			bi_nodes = intersect(in_nodes,out_nodes); # bidirectional ones
+			d_in[ii] = length(in_nodes);
+			d_out[ii] = length(out_nodes);
+			d_bi[ii] = length(bi_nodes);
+		end
+
+		#=d_in = W'*ones(dim);
+		d_out = adj_mat'*ones(dim);
+		d_bi = diag(adj_mat);=#
+		d_tot = d_in+d_out;
+
+		denom = (d_in.*d_out-d_bi);
+
+		# possible that for individual units, there would be 0's for degrees and thus for denom.
+		# this would lead to NaNs
+
+		cycle_CC = diag(W^3)./denom;
+		middleman_CC = diag(W*W'*W)./denom;
+		# thus for some units, we would have NaNs for cycle_CC and middleman_CC in a timebin
+		# if the out or in degree is only 1, then it would be moot as well
+		fanin_CC = diag(W'*W^2)./(d_in.*(d_in-1));
+		fanout_CC = diag(W^2*W')./(d_out.*(d_out-1));
+
+		all_motifs_CC = diag((W+W')^3)./(2*(d_tot.*(d_tot-1)-2*d_bi));
+
+		#=cycle_CC  = diag(temp_squared*temp)./denom;
+		middleman_CC = diag(temp*temp_prime*temp)./denom;
+		fanin_CC  = diag(temp_prime*temp_squared)./(d_in.*(d_in-1));
+		fanout_CC  = diag(temp_squared*temp_prime)./(d_out.*(d_out-1));
+		all_motifs_CC = diag(((temp+temp_prime)^3))./(2*(d_tot.*(d_tot-1)-2*d_bi));
+		=#
+	end
+
+
+	# perhaps we in fact do not want to set NaNs to zeros - we want to leave them out of population mean calculation
+	# but this also wouldn't be the reason we're getting 0's for whole-timesteps.
+#=
+	for ii = 1:size(cycle_CC)[1]
+		if isnan(cycle_CC[ii])
+			# could be NaN, for example, if the denom is zero, that is no in or out-degrees for unit ii
+			cycle_CC[ii] = 0;
+		end
+		if isnan(middleman_CC[ii])
+			middleman_CC[ii] = 0;
+		end
+		if isnan(fanin_CC[ii])
+			fanin_CC[ii] = 0;
+		end
+		if isnan(fanout_CC[ii])
+			fanout_CC[ii] = 0;
+		end
+		if isnan(all_motifs_CC[ii])
+			all_motifs_CC[ii] = 0;
+		end
+	end
+=#
+	# we want to return NaNs for some units
+	return cycle_CC, middleman_CC, fanin_CC, fanout_CC, all_motifs_CC
+end
+
 function clustered_motifs(adj_mat) # revision as of 20180728
 
 	if(isempty(adj_mat)) # with the way calculating recruitment, unlikely to be the case.
@@ -589,7 +669,7 @@ function clustered_motifs(adj_mat) # revision as of 20180728
 	dim = size(adj_mat)[1];
 
 	if(!isempty(find(W.!=0)))
-		temp = (W).^(1/3);
+		W = (W).^(1/3);
 		d_in = zeros(dim,);
 		d_out = zeros(dim,);
 		d_bi = zeros(dim,);

@@ -225,27 +225,33 @@ function density_timecourse(group_num,net_num,bin)
 
 end
 
-
 # function to calculate the density of various networks and plot a distribution
-function density_dist(group_num,net_num,bin)
-    # look at the 1000 runs we have in Run 1 of 1,6974
+function density_dist(group_num,net_num,bin,fixcond,run)
     io = load("D:/qing/$(group_num)/network/NetworkData$(net_num).jld");
     graph = io["network"]; # NxN matrix of topological weights
     # normalize according to source
     ge = graph[:,1:Ne]./(10.0^-6);
-    gi = graph[:,Ne+1:N]./(10.0^-5);
+    gi = graph[:,Ne+1:N]./(10.0^-6);
     graph = hcat(ge,gi);
 
-    io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/fix_all/Run1_Scores.jld");
+    io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/$(fixcond)/Run$(run)_Scores.jld");
     scores = io["batchscores"];
-    ofinterest = intersect(find(scores[:,1].<6.5),find(scores[:,1].>3),find(scores[:,3].>.2),find(scores[:,3].<.6));
+    #ofinterest = intersect(find(scores[:,1].<6.5),find(scores[:,1].>3),find(scores[:,3].>.2),find(scores[:,3].<.6)); # the unsuccessful but still kinda got somewhere group
+    ofinterest = intersect(find(scores[:,1].<6.5),find(scores[:,3].>.95)); # the successful group
+    #ofinterest = intersect(find(scores[:,3].>=.85));
+    #ofinterest = intersect(find(scores[:,3].<.85));
 
-    io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/fix_all/Run1_Spikes.jld");
+    io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/$(fixcond)/Run$(run)_Spikes.jld");
     Spikes = io["batchspikes"];
 
+    #io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/fix_all/Run1_Graphs.jld");
+    #Graphs = io["batchgraphs"];
+
     Density_syn = zeros(length(ofinterest),);
-    Density_rec = zeros(length(ofinterest),);
-    Density_rec_recur = zeros(length(ofinterest),);
+    Density_syn_e = zeros(length(ofinterest),);
+    Density_syn_i = zeros(length(ofinterest),);
+    #Density_rec = zeros(length(ofinterest),);
+    #Density_rec_recur = zeros(length(ofinterest),);
     Density_syn_recur = zeros(length(ofinterest),);
 
     for nn = 1:length(ofinterest) # go through every simulation that satisfied our scores
@@ -255,8 +261,10 @@ function density_dist(group_num,net_num,bin)
         spikes = Spikes[ofinterest[nn]];
         spike_set = [];
         active_inds = [];
+        lastspikes = zeros(length(spikes),);
         for ii = 1:length(spikes)
             # exclude units that never spiked outside the input stim period (first 30ms)
+            lastspikes[ii] = maximum(spikes[ii]);
             post_stim  = (spikes[ii])[find(spikes[ii] .> stim_in)];
             if !isempty(post_stim)
                 push!(spike_set, spikes[ii]);
@@ -270,8 +278,13 @@ function density_dist(group_num,net_num,bin)
         i_edges = find(active_inds.>Ne);
         W_active_i = graph[active_inds[i_edges],active_inds[i_edges]];
 
+        # find the last spike time for the network and use that to specify nbins
+        # that way it'll be more parsimonious to the truncated networks
+        lastspike = maximum(lastspikes);
+        #lastspike = scores[ofinterest[nn],3]; # <- this is the normalized version
+
         integ_frame = collect(5:20);
-        nbins = convert(Int64,(run_total-maximum(integ_frame))/bin-1);
+        nbins = convert(Int64,floor.((lastspike-maximum(integ_frame))/bin)-1);
         Nactive = length(spike_set);
         W_active = graph[active_inds,active_inds];
 
@@ -289,7 +302,7 @@ function density_dist(group_num,net_num,bin)
             end
         end
 
-        # 2. Examine density of recruitment graph across time.
+        #= 2. Examine density of recruitment graph across time.
         density_recruit = zeros(nbins-1,);
         nactiveunits = zeros(nbins-1,);
         Recruitment_e = [];
@@ -319,13 +332,17 @@ function density_dist(group_num,net_num,bin)
             # normalized by the number of units in the recruitment graph
             push!(Recruitment_e,recruit);
         end
-        Density_rec[nn] = mean(density_recruit);
+        Density_rec[nn] = mean(density_recruit);=#
 
         # The density of the whole graph should be around .2
         Nactive_e = length(e_edges);
+        Nactive_i = length(i_edges);
         density_e = length(find(W_active_e.!=0))/(Nactive_e^2-Nactive_e);
+        density_i = length(find(W_active_i.!=0))/(Nactive_i^2-Nactive_i);
         # normalized by the number of units in the active excitatory graph
-        Density_syn[nn] = density_e;
+        Density_syn_e[nn] = density_e;
+        Density_syn_i[nn] = density_i;
+        Density_syn[nn] = length(find(W_active.!=0))/(Nactive^2-Nactive);
 
         # 4. Examine whether there are more recurrent connections in recruitment networks than in the synaptic
         # (relative of course to the total number of units participating in any given timepoint)
@@ -343,7 +360,7 @@ function density_dist(group_num,net_num,bin)
         recur_syn_p = recur_syn/((Nactive_e^2-Nactive_e)/2);
         # normalized by the number of possible recurrent connections in synaptic graph
         Density_syn_recur[nn] = recur_syn_p;
-
+#=
         recur_recruit = zeros(length(Recruitment_e),);
         for tt = 1:length(Recruitment_e)
             for ii = 1:length(e_edges)
@@ -353,7 +370,7 @@ function density_dist(group_num,net_num,bin)
         end
         recur_recruit_p = recur_recruit./((Nrecruit.^2-Nrecruit)/2);
         # normalized by the number of possible recurrent connections in recruitment graph (at every timept)
-        Density_rec_recur[nn] = mean(recur_recruit_p);
+        Density_rec_recur[nn] = mean(recur_recruit_p);=#
     end
 
     #= plot
@@ -364,17 +381,195 @@ function density_dist(group_num,net_num,bin)
     Plots.histogram(Density_syn);=#
 
     # and/or save to matlab
-    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/Run1_densities_trunc.mat";
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/$(fixcond)/Run$(run)_densities_complete.mat";
+    #fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/$(fixcond)/Run$(run)_densities_trunc.mat";
     file = matopen(fname,"w");
-    write(file,"Density_rec_recur",Density_rec_recur);
+    #write(file,"Density_rec_recur",Density_rec_recur);
     write(file,"Density_syn_recur",Density_syn_recur);
-    write(file,"Density_rec",Density_rec);
+    #write(file,"Density_rec",Density_rec);
     write(file,"Density_syn",Density_syn);
+    write(file,"Density_syn_e",Density_syn_e);
+    write(file,"Density_syn_i",Density_syn_i);
     close(file);
     print("Done!");
 
 end
 
+
+# function to calculate the density of various networks and plot a distribution
+function density_dist_multinet(group_num,net_num,bin)
+    # look at Run3 of fix_all for 6974.
+    #io = load("D:/qing/$(group_num)/network/NetworkData$(net_num).jld");
+    #graph = io["network"]; # NxN matrix of topological weights
+    # normalize according to source
+
+    io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run4_Scores.jld");
+    scores = io["batchscores"];
+    #ofinterest = intersect(find(scores[:,1].<6.5),find(scores[:,1].>3),find(scores[:,3].>.2),find(scores[:,3].<.6)); # the unsuccessful but still kinda got somewhere group
+    #ofinterest = intersect(find(scores[:,1].<6.5),find(scores[:,3].>.95)); # the successful group
+    ofinterest = intersect(find(scores[:,3].>=.85));
+    #ofinterest = intersect(find(scores[:,3].<.85));
+
+    io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run4_Spikes.jld");
+    Spikes = io["batchspikes"];
+
+    io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run4_Graphs.jld");
+    Graphs = io["batchgraphs"];
+
+    Density_syn = zeros(length(ofinterest),);
+    Density_syn_e = zeros(length(ofinterest),);
+    Density_syn_i = zeros(length(ofinterest),);
+    #Density_rec = zeros(length(ofinterest),);
+    #Density_rec_recur = zeros(length(ofinterest),);
+    Density_syn_recur = zeros(length(ofinterest),);
+
+    for nn = 1:length(ofinterest) # go through every simulation that satisfied our scores
+        # 1. calculate the density of the synaptic and recruitment graphs (mean recruitment across time)
+        # 2. calculate the density of the recurrent connections in both graphs
+
+        graph = Graphs[nn];
+        ge = graph[:,1:Ne]./(10.0^-6);
+        gi = graph[:,Ne+1:N]./(10.0^-6);
+        graph = hcat(ge,gi);
+
+        spikes = Spikes[ofinterest[nn]];
+        spike_set = [];
+        active_inds = [];
+        lastspikes = zeros(length(spikes),);
+        for ii = 1:length(spikes)
+            # exclude units that never spiked outside the input stim period (first 30ms)
+            lastspikes[ii] = maximum(spikes[ii]);
+            post_stim  = (spikes[ii])[find(spikes[ii] .> stim_in)];
+            if !isempty(post_stim)
+                push!(spike_set, spikes[ii]);
+                push!(active_inds,ii);
+            end
+        end
+        # re-separate into excitatory and inhibitory populations
+        e_edges = find(active_inds.<=Ne);
+        # currently NOT considering units that are cross-type (i.e. e-to-i or i-to-e)
+        W_active_e = graph[active_inds[e_edges],active_inds[e_edges]];
+        i_edges = find(active_inds.>Ne);
+        W_active_i = graph[active_inds[i_edges],active_inds[i_edges]];
+
+        # find the last spike time for the network and use that to specify nbins
+        # that way it'll be more parsimonious to the truncated networks
+        lastspike = maximum(lastspikes);
+        #lastspike = scores[ofinterest[nn],3]; # <- this is the normalized version
+
+        integ_frame = collect(5:20);
+        nbins = convert(Int64,floor.((lastspike-maximum(integ_frame))/bin)-1);
+        Nactive = length(spike_set);
+        W_active = graph[active_inds,active_inds];
+
+        Spikes_binned = zeros(Nactive,nbins);
+
+        for ii = 1:Nactive
+            # find the indices for neuron ii for which we'll put a 1 in Spikes_binned
+            if !isempty(spike_set[ii,])
+                idx = floor.(spike_set[ii]./bin);
+                idx = idx[find(idx.<=nbins)];
+                idx = idx[find(idx.>0)];
+                for jj = 1:length(idx)
+                    Spikes_binned[ii,convert(Int64,idx[jj])] = 1;
+                end
+            end
+        end
+
+        # 2. Examine density of recruitment graph across time.
+        #=
+        density_recruit = zeros(nbins-1,);
+        nactiveunits = zeros(nbins-1,);
+        Recruitment_e = [];
+        subspikes = Spikes_binned[e_edges,:];
+        Nrecruit = zeros(nbins-1,);
+        for tt = 1:nbins-1
+            recruit = compute_recruitment_delay(W_active_e,subspikes,tt,bin);
+            Nrecruit_h = 0;
+            Nrecruit_v = 0; # find the number of units that were active in this timestep
+            # this number should be the same for the recruitment and functional graphs
+            for ii = 1:length(e_edges)
+                if !isempty(find(recruit[ii,:].!=0))
+                    Nrecruit_v = Nrecruit_v + 1;
+                end
+                if !isempty(find(recruit[:,ii].!=0))
+                    Nrecruit_h = Nrecruit_h + 1;
+                end
+            end
+            if Nrecruit_h > Nrecruit_v
+                Nrecruit[tt] = Nrecruit_h;
+            else
+                Nrecruit[tt] = Nrecruit_v;
+            end
+            x = length(find(recruit.>0));
+            nactiveunits[tt] = x;
+            density_recruit[tt] = x/(Nrecruit[tt]^2-Nrecruit[tt]);
+            # normalized by the number of units in the recruitment graph
+            push!(Recruitment_e,recruit);
+        end
+        Density_rec[nn] = mean(density_recruit);=#
+
+        # The density of the whole graph should be around .2
+        Nactive_e = length(e_edges);
+        Nactive_i = length(i_edges);
+        density_e = length(find(W_active_e.!=0))/(Nactive_e^2-Nactive_e);
+        density_i = length(find(W_active_i.!=0))/(Nactive_i^2-Nactive_i);
+        # normalized by the number of units in the active excitatory graph
+        Density_syn_e[nn] = density_e;
+        Density_syn_i[nn] = density_i;
+        Density_syn[nn] = length(find(W_active.!=0))/(Nactive^2-Nactive);
+
+        # 4. Examine whether there are more recurrent connections in recruitment networks than in the synaptic
+        # (relative of course to the total number of units participating in any given timepoint)
+        recur_syn = 0;
+        recur = 0; # check equivalence of methods
+        for ii = 1:length(e_edges)
+            for jj = 1:length(e_edges)
+                if W_active_e[ii,jj]!=0 && W_active_e[jj,ii]!=0 && ii!=jj
+                    recur_syn = recur_syn + 1;
+                end
+            end
+            idx = find(W_active_e[ii,:].!=0);
+            recur = recur + length(find(W_active_e[idx,ii].!=0));
+        end
+        recur_syn_p = recur_syn/((Nactive_e^2-Nactive_e)/2);
+        # normalized by the number of possible recurrent connections in synaptic graph
+        Density_syn_recur[nn] = recur_syn_p;
+#=
+        recur_recruit = zeros(length(Recruitment_e),);
+        for tt = 1:length(Recruitment_e)
+            for ii = 1:length(e_edges)
+                idx = find(Recruitment_e[tt][ii,:].!=0);
+                recur_recruit[tt] = recur_recruit[tt] + length(find(Recruitment_e[tt][idx,ii].!=0));
+            end
+        end
+        recur_recruit_p = recur_recruit./((Nrecruit.^2-Nrecruit)/2);
+        # normalized by the number of possible recurrent connections in recruitment graph (at every timept)
+        Density_rec_recur[nn] = mean(recur_recruit_p);=#
+    end
+
+    #= plot
+    Plots.histogram(Density_rec_recur);
+    Plots.histogram(Density_syn_recur);
+
+    Plots.histogram(Density_rec);
+    Plots.histogram(Density_syn);=#
+
+    # and/or save to matlab
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run4_densities_complete.mat";
+    #fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run4_densities_trunc.mat";
+    file = matopen(fname,"w");
+    #write(file,"Density_rec_recur",Density_rec_recur);
+    write(file,"Density_syn_recur",Density_syn_recur);
+    #write(file,"Density_rec",Density_rec);
+    write(file,"Density_syn",Density_syn);
+    write(file,"Density_syn_e",Density_syn_e);
+    write(file,"Density_syn_i",Density_syn_i);
+    close(file);
+    print("Done!");
+
+end
+#=
 function rate_motif_correspondence(group_num,net_num,bin)
     # This function examines
     # 1. the global rate and the global motif values over time
@@ -475,17 +670,18 @@ function rate_motif_correspondence(group_num,net_num,bin)
     write(file,"fanin_CC_nan",fanin_recruit_CC_nan);
     write(file,"fanout_CC_nan",fanout_recruit_CC_nan);
     write(file,"all_CC_nan",all_recruit_CC_nan);
-    #=
+
     write(file,"IndivRate",IndivRate);
     write(file,"indiv_cycle_CC",indiv_cycle_CC);
     write(file,"indiv_middle_CC",indiv_middle_CC);
     write(file,"indiv_fanin_CC",indiv_fanin_CC);
     write(file,"indiv_fanout_CC",indiv_fanout_CC);
     write(file,"indiv_all_CC",indiv_all_CC);
-    =#
+
     close(file);
 
 end
+=#
 
 function rate_comparison(group_num,net_num,bin)
     # Compare with rates from networks before we altered the poisson input

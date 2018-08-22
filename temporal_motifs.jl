@@ -17,7 +17,7 @@ function main()
     graph = io["network"]; # NxN matrix of topological weights
     # normalize according to source, since the graph returned from score() function and saved is we+wi
     ge = graph[:,1:Ne]./(10.0^-6);
-    gi = graph[:,Ne+1:N]./(10.0^-5);
+    gi = graph[:,Ne+1:N]./(10.0^-6);
     graph = hcat(ge,gi);
 
     io = load("D:/qing/0/spikes/SpikeData22000.jld");

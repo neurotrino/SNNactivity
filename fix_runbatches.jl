@@ -73,7 +73,6 @@ function run_batches(run,Nbatch,group_num,net_num)
     generated_projected = io["input_neurons"]; # indices of input units
     cd("C:/");
 
-
     # fixing everything, we want to observe how the spikes and scores change
     batchscores = zeros(Nbatch,9);
     batchspikes = [];
@@ -126,9 +125,9 @@ function run_batches(run,Nbatch,group_num,net_num)
         push!(batchic,ic);
     end
     # and save
-    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Scores.jld";
-    save(fname,"batchspikes",batchspikes);
     fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Spikes.jld";
+    save(fname,"batchspikes",batchspikes);
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Scores.jld";
     save(fname,"batchscores",batchscores);
     fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_proj/Run$(run)_Stim.jld";
     save(fname,"batchstim",batchstim);
@@ -161,6 +160,40 @@ function run_batches(run,Nbatch,group_num,net_num)
     fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/fix_topo_stim/Run$(run)_IC.jld";
     save(fname,"batchic",batchic);
 
+    #= vary everything!
+    if run == 1
+        mkdir("C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all");
+    end
+
+    batchscores = zeros(Nbatch,9);
+    batchspikes = [];
+    batchstim = [];
+    batchgraph = [];
+    batchic = [];
+    batchprojected = zeros(Nbatch,num_projected);
+    for jj = 1:Nbatch
+        batchscores[jj,:],spikes,stim,graph,batchprojected[jj,:],ic = vary_all(param);
+        push!(batchspikes,spikes);
+        push!(batchic,ic);
+        push!(batchstim,stim);
+        push!(batchgraph,graph);
+    end
+    # and save
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run$(run)_Scores.jld";
+    save(fname,"batchscores",batchscores);
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run$(run)_Stim.jld";
+    save(fname,"batchstim",batchstim);
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run$(run)_Projected.jld";
+    save(fname,"batchprojected",batchprojected);
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run$(run)_Spikes.jld";
+    save(fname,"batchspikes",batchspikes);
+    fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/vary_all/Run$(run)_Graphs.jld";
+    save(fname,"batchgraph",batchgraph);=#
+end
+
+function vary_all(param)
+    (score_vals, tSpike, projected, graph, gP_full, ic) = score(param;trials=0,generated_net=0,plot=false,generated_stim=0,generated_projected=0,saved_ic=0)
+    return score_vals, tSpike, gP_full, graph, projected, ic
 end
 
 function fix_all_ic(param, generated_net, generated_stim, generated_projected, saved_ic)
@@ -201,17 +234,17 @@ function analyze_batches(run,group_num,net_num,fixtype,bin)
     ScoreData = io["batchscores"];
     #print("In looking at run $(run) of network $(net_num):\n\n");
 
-    inds = find(ScoreData[:,3] .> .95);
+    #inds = find(ScoreData[:,3] .> .95);
     #print("Out of $(length(SpikeData)) trials in this batch, $(length(inds)) made it to completion.\n\n");
     #print("Each of the successful trials in this batch had rates:\n\n")
     #print(ScoreData[inds,1]);
     # toggle this so we examine low rate networks that did not succeed
-    # ofinterest = intersect(find(ScoreData[:,3].<.5),find(ScoreData[:,3].>.2),find(ScoreData[:,1].<5),find(ScoreData[:,1].>2));
-    ofinterest = intersect(find(ScoreData[:,3].>.95),find(ScoreData[:,1].<5));
+    #ofinterest = intersect(find(ScoreData[:,3].<.95),find(ScoreData[:,3].>.2),find(ScoreData[:,1].<6.5),find(ScoreData[:,1].>2.5));
+    ofinterest = intersect(find(ScoreData[:,3].>.95),find(ScoreData[:,1].<6.5));
 
     # compare with original network's scores
-    io = load("D:/qing/$(group_num)/scores/ScoreData$(net_num).jld");
-    orig_scores = io["scores"];
+    #io = load("D:/qing/$(group_num)/scores/ScoreData$(net_num).jld");
+    #orig_scores = io["scores"];
     #print("\n\nThe original network's scores were:\n\n");
     #print(orig_scores);
 
@@ -225,15 +258,17 @@ function analyze_batches(run,group_num,net_num,fixtype,bin)
             graph = io["network"]; # NxN matrix of topological weights
             # normalize according to source, since the graph returned from score() function and saved is we+wi
             ge = graph[:,1:Ne]./(10.0^-6);
-            gi = graph[:,Ne+1:N]./(10.0^-5);
+            gi = graph[:,Ne+1:N]./(10.0^-6);
             graph = hcat(ge,gi);
 
             # take the spike data from the run where the score satisfied our criteria (completion and low rate)
             spikes = SpikeData[ofinterest[trialidx]];
             spike_set = [];
             active_inds = [];
+            lastspikes = zeros(length(spikes),);
             for ii = 1:length(spikes)
                 # exclude units that never spiked outside the input stim period (first 30ms)
+                lastspikes[ii] = maximum(spikes[ii]);
                 post_stim  = (spikes[ii])[find(spikes[ii] .> stim_in)];
                 if !isempty(post_stim)
                     push!(spike_set, spikes[ii]);
@@ -249,7 +284,9 @@ function analyze_batches(run,group_num,net_num,fixtype,bin)
             W_active_i = graph[active_inds[i_edges],active_inds[i_edges]];
 
             integ_frame = collect(5:20);
-            nbins = convert(Int64,(run_total-maximum(integ_frame))/bin-1);
+            lastspike = maximum(lastspikes);
+            nbins = convert(Int64,floor.((lastspike-maximum(integ_frame))/bin)-1);
+            #nbins = convert(Int64,(run_total-maximum(integ_frame))/bin-1);
             Nactive = length(spike_set);
             W_active = graph[active_inds,active_inds];
 
@@ -287,7 +324,8 @@ function analyze_batches(run,group_num,net_num,fixtype,bin)
 
             graph = W_active_e;
             subspikes = Spikes_binned[e_edges,:];
-            fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/motif_data/$(fixtype)/newCC/Run$(run)_subgraph_e_$(NetID).mat";
+            fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/motif_data/$(fixtype)/newCC/Run$(run)_complete_e_$(NetID).mat";
+            #fname = "C:/Users/maclean lab/Documents/qing/$(net_num)/motif_data/$(fixtype)/newCC/Run$(run)_trunc_e_$(NetID).mat";
             excit_inhib_analysis(graph,subspikes,nbins,fname,bin);
 
             #=graph = W_active_i;
@@ -354,3 +392,49 @@ function branching_param(tSpike,W)
     return net_bscore, units_bscore;
 end
 =#
+
+function branching_vs_rate()   #(group_num,net_num,run,fix_cond)
+    #io = load("C:/Users/maclean lab/Documents/qing/$(net_num)/$(fix_cond)/Run$(run)_Scores.jld");
+
+    # but while you're at it, you can look at the different effects of each kind of fixative condition.
+    # for example, how much does branching and rate vary for fixing all, varying input units, and varying stim?
+
+
+    io = load("C:/Users/maclean lab/Documents/qing/22000/fix_all/Run2_Scores.jld");
+    scores = io["batchscores"];
+    idx = find(scores[:,3].>.95);
+    scores = scores[idx,:];
+    e_rate = scores[:,1];
+    i_rate = scores[:,2];
+    e_branch = scores[:,7];
+    i_branch = scores[:,8];
+    branching = scores[:,9];
+    io = load("C:/Users/maclean lab/Documents/qing/22000/fix_topo_proj/Run2_Scores.jld");
+    scores = io["batchscores"];
+    idx = find(scores[:,3].>.95);
+    scores = scores[idx,:];
+    e_rate = vcat(e_rate,scores[:,1]);
+    i_rate = vcat(i_rate,scores[:,2]);
+    e_branch = vcat(e_branch,scores[:,7]);
+    i_branch = vcat(i_branch,scores[:,8]);
+    branching = vcat(branching,scores[:,9]);
+    io = load("C:/Users/maclean lab/Documents/qing/22000/fix_topo_stim/Run2_Scores.jld");
+    scores = io["batchscores"];
+    idx = find(scores[:,3].>.95);
+    scores = scores[idx,:];
+    e_rate = vcat(e_rate,scores[:,1]);
+    i_rate = vcat(i_rate,scores[:,2]);
+    e_branch = vcat(e_branch,scores[:,7]);
+    i_branch = vcat(i_branch,scores[:,8]);
+    branching = vcat(branching,scores[:,9]);
+
+    fname = "C:/Users/maclean lab/Documents/qing/22000/Run2_rate_branching_complete.mat";
+    file = matopen(fname,"w");
+    write(file,"e_rate",e_rate);
+    write(file,"i_rate",i_rate);
+    write(file,"e_branch",e_branch);
+    write(file,"i_branch",i_branch);
+    write(file,"branching",branching);
+    close(file);
+
+end

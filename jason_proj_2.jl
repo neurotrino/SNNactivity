@@ -589,7 +589,7 @@ function clustered_motifs(adj_mat) # revision as of 20180728
 	dim = size(adj_mat)[1];
 
 	if(!isempty(find(W.!=0)))
-		temp = (W).^(1/3);
+		W = (W).^(1/3);
 		d_in = zeros(dim,);
 		d_out = zeros(dim,);
 		d_bi = zeros(dim,);
